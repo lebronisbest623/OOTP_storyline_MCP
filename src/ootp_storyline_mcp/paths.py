@@ -4,6 +4,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_DIR = PROJECT_ROOT / "catalog"
 PROJECTS_DIR = PROJECT_ROOT / "projects"
+WORKSPACE_FILENAME = "storyline_workspace.json"
+WORKSPACE_PATH = PROJECTS_DIR / WORKSPACE_FILENAME
 EXPORTS_DIR = PROJECT_ROOT / "exports"
 SCHEMAS_DIR = PROJECT_ROOT / "schemas"
 STOCK_DIR = PROJECT_ROOT / "stock"

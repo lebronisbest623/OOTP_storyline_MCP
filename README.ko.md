@@ -6,7 +6,7 @@ OOTP 스토리라인 작성, 검증, XML export를 위한 MCP 서버입니다.
 
 ## 개요
 
-- 스토리라인 프로젝트를 JSON으로 작성
+- 여러 STORYLINE 엔트리를 하나의 누적 workspace JSON 파일에 저장
 - 단일 프로젝트 및 번들 검증
 - OOTP 호환 XML export
 - stock XML과 engine debug trace 양쪽에서 발견된 trigger 지원
@@ -79,44 +79,33 @@ claude mcp add --scope project ootp-storyline -- python run_server.py
 
 ## 핵심 MCP 툴
 
+워크스페이스:
+- `get_workspace`
+- `import_storyline_xml`
+- `save_workspace_xml`
+
 카탈로그:
 - `get_catalog_summary`
 - `list_trigger_events`
-- `get_trigger_event_details`
 - `list_data_object_types`
 - `list_attributes`
-- `search_attributes`
-- `get_attribute_details`
 
-프로젝트:
-- `list_projects`
+스토리라인 엔트리:
 - `get_project`
 - `delete_project`
 - `create_storyline_project`
-- `bulk_create_storyline_projects`
-- `update_storyline_meta`
-- `remove_storyline_meta_keys`
-
-배우/기사:
-- `add_required_data_object`
-- `remove_required_data_object`
-- `add_article`
-- `update_article`
-- `remove_article`
+- `patch_storyline_project`
 
 검증/출력:
 - `validate_storyline_project`
-- `bulk_validate_storyline_projects`
-- `validate_storyline_bundle`
-- `export_storyline_project_xml`
-- `bulk_export_storyline_projects_xml`
-- `export_storyline_bundle_xml`
+- `validate_workspace`
 
 가이드:
 - `get_authoring_guidance`
 
 ## 참고
 
+- 기본 작성 대상은 `projects/storyline_workspace.json`입니다.
 - `projects/*.json`은 기본적으로 git에 포함하지 않습니다.
 - `stock/storylines_english.xml`도 기본적으로 git에 포함하지 않습니다.
 - 이 저장소는 OOTP 원본 자산이 아니라 MCP 서버와 툴킷 자체를 배포합니다.

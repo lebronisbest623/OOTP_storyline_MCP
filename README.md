@@ -6,7 +6,7 @@ Korean README: [README.ko.md](README.ko.md)
 
 ## Overview
 
-- Author storyline projects as JSON
+- Store authored storyline entries in one accumulated workspace JSON file
 - Validate single projects and multi-project bundles
 - Export OOTP-compatible XML
 - Support triggers discovered from both stock XML and engine debug traces
@@ -79,44 +79,33 @@ Project `.cursor/mcp.json`:
 
 ## Core tools
 
+Workspace:
+- `get_workspace`
+- `import_storyline_xml`
+- `save_workspace_xml`
+
 Catalog:
 - `get_catalog_summary`
 - `list_trigger_events`
-- `get_trigger_event_details`
 - `list_data_object_types`
 - `list_attributes`
-- `search_attributes`
-- `get_attribute_details`
 
-Projects:
-- `list_projects`
+Storyline entries:
 - `get_project`
 - `delete_project`
 - `create_storyline_project`
-- `bulk_create_storyline_projects`
-- `update_storyline_meta`
-- `remove_storyline_meta_keys`
-
-Required data / articles:
-- `add_required_data_object`
-- `remove_required_data_object`
-- `add_article`
-- `update_article`
-- `remove_article`
+- `patch_storyline_project`
 
 Validation / export:
 - `validate_storyline_project`
-- `bulk_validate_storyline_projects`
-- `validate_storyline_bundle`
-- `export_storyline_project_xml`
-- `bulk_export_storyline_projects_xml`
-- `export_storyline_bundle_xml`
+- `validate_workspace`
 
 Guidance:
 - `get_authoring_guidance`
 
 ## Notes
 
+- The default authoring target is `projects/storyline_workspace.json`.
 - `projects/*.json` is not tracked by default.
 - `stock/storylines_english.xml` is not tracked by default.
 - This repository ships the MCP server and toolkit, not OOTP-owned content.

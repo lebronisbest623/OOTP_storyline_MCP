@@ -8,6 +8,7 @@ from . import catalog as catalog_module
 from . import project_store as project_store_module
 from . import validation as validation_module
 from . import xml_export as xml_export_module
+from . import xml_import as xml_import_module
 
 mcp = FastMCP("OOTP Storyline MCP")
 
@@ -36,11 +37,13 @@ def _runtime() -> dict[str, Any]:
     importlib.reload(project_store_module)
     importlib.reload(validation_module)
     importlib.reload(xml_export_module)
+    importlib.reload(xml_import_module)
     return {
         "catalog": catalog_module,
         "project_store": project_store_module,
         "validation": validation_module,
         "xml_export": xml_export_module,
+        "xml_import": xml_import_module,
     }
 
 
@@ -104,17 +107,17 @@ def get_catalog_summary() -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_trigger_events(source: str = "") -> list[dict[str, Any]]:
+def list_trigger_events(source: str = "", query: str = "") -> list[dict[str, Any]]:
     records = _catalog()["trigger_events"]
     source_filter = source.strip().lower().replace("-", "_")
     if not source_filter:
-        return records
-    return [record for record in records if source_filter in record.get("sources", [])]
-
-
-@mcp.tool()
-def get_trigger_event_details(name: str) -> dict[str, Any] | None:
-    return _lookup(_catalog()["trigger_events"], name)
+        filtered = records
+    else:
+        filtered = [record for record in records if source_filter in record.get("sources", [])]
+    query_lower = query.strip().lower()
+    if not query_lower:
+        return filtered
+    return [record for record in filtered if query_lower in record["name"].lower()]
 
 
 @mcp.tool()
@@ -123,49 +126,105 @@ def list_data_object_types() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-def list_attributes(section: str) -> list[dict[str, Any]]:
+def list_attributes(section: str = "", query: str = "") -> list[dict[str, Any]]:
     data = _catalog()
     mapping = {
         "storyline": data["storyline_attributes"],
         "data_object": data["data_object_attributes"],
         "article": data["article_attributes"],
     }
-    return mapping[_normalize_section(section)]
-
-
-@mcp.tool()
-def search_attributes(query: str, section: str = "") -> list[dict[str, Any]]:
-    query_lower = query.strip().lower()
-    if not query_lower:
-        return []
-
     sections = ["storyline", "data_object", "article"]
     if section.strip():
         sections = [_normalize_section(section)]
 
+    query_lower = query.strip().lower()
     results: list[dict[str, Any]] = []
     for current_section in sections:
-        for record in list_attributes(current_section):
-            haystacks = [record["name"].lower(), *(sample.lower() for sample in record.get("samples", []))]
-            if any(query_lower in hay for hay in haystacks):
-                results.append({"section": current_section, **record})
+        for record in mapping[current_section]:
+            if query_lower:
+                haystacks = [record["name"].lower(), *(sample.lower() for sample in record.get("samples", []))]
+                if not any(query_lower in hay for hay in haystacks):
+                    continue
+            results.append({"section": current_section, **record})
     return results
 
 
 @mcp.tool()
-def get_attribute_details(section: str, name: str) -> dict[str, Any] | None:
-    normalized_section = _normalize_section(section)
-    records = list_attributes(normalized_section)
-    record = _lookup(records, name)
-    if record is None:
-        return None
-    return {"section": normalized_section, **record}
+def get_workspace() -> dict[str, Any]:
+    runtime = _runtime()
+    workspace = runtime["project_store"].load_workspace()
+    return {
+        "workspace": runtime["project_store"].get_workspace_summary(),
+        "storylines": runtime["project_store"].list_projects(),
+        "validation": runtime["validation"].validate_bundle(workspace.get("storylines", [])),
+    }
 
 
 @mcp.tool()
-def list_projects() -> list[dict[str, Any]]:
+def import_storyline_xml(xml_path: str, mode: str = "replace") -> dict[str, Any]:
     runtime = _runtime()
-    return runtime["project_store"].list_projects()
+    parsed = runtime["xml_import"].parse_storyline_xml(xml_path)
+    normalized_mode = mode.strip().lower()
+    if normalized_mode not in {"replace", "append"}:
+        raise ValueError("mode must be 'replace' or 'append'")
+
+    if normalized_mode == "replace":
+        workspace = runtime["project_store"].replace_workspace_storylines(
+            parsed["storylines"],
+            source_xml_path=parsed["source_xml_path"],
+            source_fileversion=parsed["source_fileversion"],
+        )
+    else:
+        before_count = len(runtime["project_store"].load_workspace().get("storylines", []))
+        workspace = runtime["project_store"].merge_workspace_storylines(
+            parsed["storylines"],
+            source_xml_path=parsed["source_xml_path"],
+            source_fileversion=parsed["source_fileversion"],
+        )
+        after_count = len(workspace.get("storylines", []))
+        return {
+            "workspace": runtime["project_store"].get_workspace_summary(),
+            "imported_storyline_count": len(parsed["storylines"]),
+            "mode": normalized_mode,
+            "added_or_updated_count": len(parsed["storylines"]),
+            "workspace_storyline_count_before": before_count,
+            "workspace_storyline_count_after": after_count,
+            "validation": runtime["validation"].validate_bundle(workspace.get("storylines", [])),
+        }
+
+    return {
+        "workspace": runtime["project_store"].get_workspace_summary(),
+        "imported_storyline_count": len(parsed["storylines"]),
+        "mode": normalized_mode,
+        "validation": runtime["validation"].validate_bundle(workspace.get("storylines", [])),
+    }
+
+
+@mcp.tool()
+def save_workspace_xml(xml_path: str = "", create_backup: bool = True) -> dict[str, Any]:
+    runtime = _runtime()
+    workspace = runtime["project_store"].load_workspace()
+    projects = workspace.get("storylines", [])
+    output_path = xml_path.strip() if xml_path.strip() else workspace.get("source_xml_path", "")
+    if not output_path:
+        output_path = str(runtime["xml_export"].export_storyline_bundle_xml(projects))
+        return {
+            "output_path": output_path,
+            "used_workspace_source_path": False,
+            "validation": runtime["validation"].validate_bundle(projects),
+        }
+
+    written_path = runtime["xml_export"].write_projects_xml_to_path(
+        projects,
+        output_path,
+        source_fileversion=workspace.get("source_fileversion", "OOTP Storyline MCP Export"),
+        create_backup=create_backup,
+    )
+    return {
+        "output_path": str(written_path),
+        "used_workspace_source_path": not bool(xml_path.strip()),
+        "validation": runtime["validation"].validate_bundle(projects),
+    }
 
 
 @mcp.tool()
@@ -208,73 +267,10 @@ def create_storyline_project(
 
 
 @mcp.tool()
-def bulk_create_storyline_projects(projects_json: str) -> dict[str, Any]:
+def patch_storyline_project(project_id: str, patch_json: str) -> dict[str, Any]:
     runtime = _runtime()
-    specs = json.loads(projects_json)
-    projects = runtime["project_store"].create_projects(specs)
-    return {
-        "created_count": len(projects),
-        "projects": [
-            {
-                "id": project["id"],
-                "validation": runtime["validation"].validate_project(project),
-            }
-            for project in projects
-        ],
-    }
-
-
-@mcp.tool()
-def update_storyline_meta(project_id: str, updates_json: str) -> dict[str, Any]:
-    runtime = _runtime()
-    updates = json.loads(updates_json)
-    project = runtime["project_store"].update_project_meta(project_id, updates)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def remove_storyline_meta_keys(project_id: str, keys_json: str) -> dict[str, Any]:
-    runtime = _runtime()
-    keys = json.loads(keys_json)
-    project = runtime["project_store"].remove_project_meta_keys(project_id, keys)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def add_required_data_object(project_id: str, data_object_json: str) -> dict[str, Any]:
-    runtime = _runtime()
-    data_object = json.loads(data_object_json)
-    project = runtime["project_store"].add_required_data_object(project_id, data_object)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def remove_required_data_object(project_id: str, index: int) -> dict[str, Any]:
-    runtime = _runtime()
-    project = runtime["project_store"].remove_required_data_object(project_id, index)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def add_article(project_id: str, article_json: str) -> dict[str, Any]:
-    runtime = _runtime()
-    article = json.loads(article_json)
-    project = runtime["project_store"].add_article(project_id, article)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def update_article(project_id: str, article_id: int, updates_json: str) -> dict[str, Any]:
-    runtime = _runtime()
-    updates = json.loads(updates_json)
-    project = runtime["project_store"].update_article(project_id, article_id, updates)
-    return _project_with_validation(project)
-
-
-@mcp.tool()
-def remove_article(project_id: str, article_id: int) -> dict[str, Any]:
-    runtime = _runtime()
-    project = runtime["project_store"].remove_article(project_id, article_id)
+    patch = json.loads(patch_json)
+    project = runtime["project_store"].patch_project(project_id, patch)
     return _project_with_validation(project)
 
 
@@ -286,95 +282,25 @@ def validate_storyline_project(project_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def bulk_validate_storyline_projects(project_ids_json: str = "") -> dict[str, Any]:
+def validate_workspace() -> dict[str, Any]:
     runtime = _runtime()
-    projects = _resolve_projects_from_json(project_ids_json)
-    results = []
-    valid_count = 0
-    for project in projects:
-        validation = runtime["validation"].validate_project(project)
-        if validation["valid"]:
-            valid_count += 1
-        results.append({"id": project["id"], "validation": validation})
-    return {
-        "project_count": len(projects),
-        "valid_count": valid_count,
-        "results": results,
-    }
-
-
-@mcp.tool()
-def validate_storyline_bundle(project_ids_json: str = "") -> dict[str, Any]:
-    runtime = _runtime()
-    projects = _resolve_projects_from_json(project_ids_json)
+    projects = runtime["project_store"].load_workspace().get("storylines", [])
     return runtime["validation"].validate_bundle(projects)
-
-
-@mcp.tool()
-def export_storyline_project_xml(project_id: str, output_filename: str = "") -> dict[str, Any]:
-    runtime = _runtime()
-    project = runtime["project_store"].load_project(project_id)
-    validation = runtime["validation"].validate_project(project)
-    output_path = runtime["xml_export"].export_project_xml(project, output_filename)
-    return {
-        "output_path": str(output_path),
-        "validation": validation,
-    }
-
-
-@mcp.tool()
-def bulk_export_storyline_projects_xml(project_ids_json: str = "") -> dict[str, Any]:
-    runtime = _runtime()
-    projects = _resolve_projects_from_json(project_ids_json)
-    outputs = []
-    for project in projects:
-        output_path = runtime["xml_export"].export_project_xml(project)
-        outputs.append(
-            {
-                "id": project["id"],
-                "output_path": str(output_path),
-                "validation": runtime["validation"].validate_project(project),
-            }
-        )
-    return {
-        "project_count": len(projects),
-        "outputs": outputs,
-    }
-
-
-@mcp.tool()
-def export_storyline_bundle_xml(
-    project_ids_json: str = "",
-    output_filename: str = "",
-    export_even_if_invalid: bool = False,
-) -> dict[str, Any]:
-    runtime = _runtime()
-    projects = _resolve_projects_from_json(project_ids_json)
-    bundle_validation = runtime["validation"].validate_bundle(projects)
-    output_path = None
-    if bundle_validation["valid"] or export_even_if_invalid:
-        output_path = runtime["xml_export"].export_storyline_bundle_xml(projects, output_filename)
-    return {
-        "project_count": len(projects),
-        "output_path": str(output_path) if output_path else None,
-        "bundle_validation": bundle_validation,
-        "exported": output_path is not None,
-    }
 
 
 @mcp.tool()
 def get_authoring_guidance() -> dict[str, Any]:
     return {
         "recommended_workflow": [
-            "Prefer one project per event or storyline concept.",
-            "Use multiple small projects and combine them with a bundle XML for large sets.",
-            "Run project validation often, then run bundle validation before final export.",
+            "Treat the local workspace file as the single source of truth for your storyline file.",
+            "Add one storyline entry at a time, but keep them accumulated in the same workspace.",
+            "Run project validation often, then run workspace validation before final export.",
             "Treat engine_debug_trace trigger events as valid but distinct from stock_xml triggers.",
             "For Korean or other non-ASCII text, trust the written UTF-8 files over raw PowerShell rendering.",
         ],
-        "why_multi_project_is_safer": (
-            "Different triggers, seasonal gates, and REQUIRED_DATA shapes tend to conflict when many unrelated "
-            "events accumulate in one project. Small projects stay easier to validate, edit, and remove."
+        "why_single_workspace_is_better": (
+            "OOTP ultimately reads one storyline XML file. This server now stores authored storyline entries in one "
+            "workspace JSON file so ongoing work matches the final export shape more closely."
         ),
         "hot_reload_note": (
             "This server reloads local catalog, validation, export, and project-store modules on each tool call. "

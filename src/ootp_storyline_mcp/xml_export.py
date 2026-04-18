@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 from typing import Any
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
@@ -73,7 +74,7 @@ def export_project_xml(project: dict[str, Any], output_filename: str = "") -> Pa
 
 def export_storyline_bundle_xml(projects: list[dict[str, Any]], output_filename: str = "") -> Path:
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = output_filename or "storyline_bundle.xml"
+    filename = output_filename or "storylines.xml"
     if not filename.lower().endswith(".xml"):
         filename = f"{filename}.xml"
     path = EXPORTS_DIR / filename
@@ -82,6 +83,32 @@ def export_storyline_bundle_xml(projects: list[dict[str, Any]], output_filename:
     storylines_node = ET.SubElement(root, "STORYLINES")
     for project in projects:
         _append_storyline_element(storylines_node, project)
+
+    raw = ET.tostring(root, encoding="utf-8")
+    pretty = minidom.parseString(raw).toprettyxml(indent="\t", encoding="UTF-8")
+    path.write_bytes(pretty)
+    return path
+
+
+def write_projects_xml_to_path(
+    projects: list[dict[str, Any]],
+    xml_path: str,
+    source_fileversion: str = "OOTP Storyline MCP Export",
+    create_backup: bool = False,
+) -> Path:
+    path = Path(xml_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    root = ET.Element("STORYLINE_DATABASE", {"fileversion": source_fileversion or "OOTP Storyline MCP Export"})
+    storylines_node = ET.SubElement(root, "STORYLINES")
+    for project in projects:
+        _append_storyline_element(storylines_node, project)
+
+    if create_backup and path.exists():
+        from .xml_import import backup_path_for
+
+        backup_path = backup_path_for(str(path))
+        shutil.copy2(path, backup_path)
 
     raw = ET.tostring(root, encoding="utf-8")
     pretty = minidom.parseString(raw).toprettyxml(indent="\t", encoding="UTF-8")
