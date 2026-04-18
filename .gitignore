@@ -1,0 +1,9 @@
+﻿__pycache__/
+*.pyc
+.venv/
+.env
+catalog/*.tmp.json
+exports/*.xml
+stock/storylines_english.xml
+projects/*.json
+!projects/.gitkeep

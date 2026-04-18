@@ -1,0 +1,24 @@
+﻿[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ootp-storyline-mcp"
+version = "0.1.0"
+description = "MCP tools for authoring and validating OOTP storylines"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.9.0",
+  "jsonschema>=4.23.0",
+]
+
+[project.scripts]
+ootp-storyline-mcp = "ootp_storyline_mcp.server:main"
+extract-storyline-catalog = "ootp_storyline_mcp.catalog:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
