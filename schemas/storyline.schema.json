@@ -35,12 +35,17 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "subject", "text"],
+        "required": ["article_key", "subject", "text"],
         "properties": {
-          "id": { "type": "integer" },
+          "article_key": { "type": "string", "minLength": 1 },
           "subject": { "type": "string" },
           "text": { "type": "string" },
-          "injury_description": { "type": "string" }
+          "injury_description": { "type": "string" },
+          "reply": { "type": "string" },
+          "previous_article_keys": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
         },
         "additionalProperties": {
           "type": ["string", "integer", "boolean"]

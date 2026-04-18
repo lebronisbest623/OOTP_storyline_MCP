@@ -1,15 +1,8 @@
 ﻿# OOTP Storyline MCP
 
-MCP server for authoring, validating, and exporting OOTP storyline content.
+MCP server for editing OOTP storylines as local JSON files and compiling them back into a single OOTP-compatible XML file.
 
 Korean README: [README.ko.md](README.ko.md)
-
-## Overview
-
-- Store authored storyline entries in one accumulated workspace JSON file
-- Validate single projects and multi-project bundles
-- Export OOTP-compatible XML
-- Support triggers discovered from both stock XML and engine debug traces
 
 ## Requirements
 
@@ -25,6 +18,22 @@ Korean README: [README.ko.md](README.ko.md)
 cd C:\Users\user\OOTP_storyline_MCP
 python run_server.py
 ```
+
+## Storage model
+
+- `projects/*.json`: one storyline per file
+- `projects/_workspace.json`: local source XML metadata
+- `projects/_article_ids.json`: stable compiled `ARTICLE id` assignments
+- `save_workspace_xml`: compiles every project file into one XML file
+
+## Recommended workflow
+
+1. `import_storyline_xml`
+2. `get_workspace`
+3. `get_project`
+4. `patch_storyline_project`
+5. `validate_storyline_project` or `validate_workspace`
+6. `save_workspace_xml`
 
 ## Client setup
 
@@ -76,7 +85,7 @@ Global `~/.mcp.json`:
 }
 ```
 
-Use an absolute path in global config. Relative paths only work reliably when the MCP config file lives in the project root.
+Use an absolute path in global config.
 
 ### Cursor
 
@@ -94,14 +103,9 @@ Project `.cursor/mcp.json`:
 }
 ```
 
-If you use a global Cursor MCP config instead of a project-local one, use an absolute path there as well.
+Use an absolute path if you configure Cursor globally instead of per project.
 
 ## Core tools
-
-Workspace:
-- `get_workspace`
-- `import_storyline_xml`
-- `save_workspace_xml`
 
 Catalog:
 - `get_catalog_summary`
@@ -109,13 +113,18 @@ Catalog:
 - `list_data_object_types`
 - `list_attributes`
 
-Storyline entries:
+Workspace:
+- `get_workspace`
+- `import_storyline_xml`
+- `save_workspace_xml`
+
+Storylines:
 - `get_project`
 - `delete_project`
 - `create_storyline_project`
 - `patch_storyline_project`
 
-Validation / export:
+Validation:
 - `validate_storyline_project`
 - `validate_workspace`
 

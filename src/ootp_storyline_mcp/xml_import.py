@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
@@ -52,35 +52,70 @@ def _child_text(node: ET.Element, tag: str) -> str | None:
     return child.text or ""
 
 
-def _parse_article(article_node: ET.Element) -> dict[str, Any]:
-    article = _coerce_attributes(dict(article_node.attrib), "article")
-    subject = _child_text(article_node, "SUBJECT")
-    text = _child_text(article_node, "TEXT")
-    if subject is not None:
-        article["subject"] = subject
-    if text is not None:
-        article["text"] = text
-    reply = _child_text(article_node, "REPLY")
-    if reply is not None:
-        article["reply"] = reply
-    injury_description = _child_text(article_node, "INJURY_DESCRIPTION")
-    if injury_description is not None:
-        article["injury_description"] = injury_description
-    return article
+def _article_key_for_import(index: int, article_id: int | None = None) -> str:
+    if index == 0:
+        return "main"
+    if article_id is not None:
+        return f"article_{article_id}"
+    return f"article_{index + 1}"
 
 
-def _parse_storyline(storyline_node: ET.Element) -> dict[str, Any]:
+def _parse_storyline(storyline_node: ET.Element) -> tuple[dict[str, Any], dict[str, int]]:
     storyline = _coerce_attributes(dict(storyline_node.attrib), "storyline")
+    storyline_id = str(storyline.get("id"))
+
     required_data: list[dict[str, Any]] = []
     for data_object_node in storyline_node.findall("./REQUIRED_DATA/DATA_OBJECT"):
         required_data.append(_coerce_attributes(dict(data_object_node.attrib), "data_object"))
     storyline["required_data"] = required_data
 
+    raw_articles: list[tuple[dict[str, Any], list[str], int | None]] = []
+    id_to_key: dict[int, str] = {}
+    manifest_entries: dict[str, int] = {}
+
+    for index, article_node in enumerate(storyline_node.findall("./ARTICLES/ARTICLE")):
+        article = _coerce_attributes(dict(article_node.attrib), "article")
+        subject = _child_text(article_node, "SUBJECT")
+        text = _child_text(article_node, "TEXT")
+        if subject is not None:
+            article["subject"] = subject
+        if text is not None:
+            article["text"] = text
+        reply = _child_text(article_node, "REPLY")
+        if reply is not None:
+            article["reply"] = reply
+        injury_description = _child_text(article_node, "INJURY_DESCRIPTION")
+        if injury_description is not None:
+            article["injury_description"] = injury_description
+
+        article_id = article.pop("id", None)
+        article_id = article_id if isinstance(article_id, int) else None
+        article_key = _article_key_for_import(index, article_id)
+        article["article_key"] = article_key
+        if article_id is not None:
+            id_to_key[article_id] = article_key
+            manifest_entries[f"{storyline_id}:{article_key}"] = article_id
+
+        previous_ids = article.pop("previous_ids", "")
+        raw_previous_ids = [part.strip() for part in str(previous_ids).split(",") if part.strip()]
+        raw_articles.append((article, raw_previous_ids, article_id))
+
     articles: list[dict[str, Any]] = []
-    for article_node in storyline_node.findall("./ARTICLES/ARTICLE"):
-        articles.append(_parse_article(article_node))
+    for article, raw_previous_ids, _ in raw_articles:
+        if raw_previous_ids:
+            previous_article_keys: list[str] = []
+            for raw_previous in raw_previous_ids:
+                if raw_previous.isdigit():
+                    previous_article_keys.append(
+                        id_to_key.get(int(raw_previous), f"article_{raw_previous}")
+                    )
+                else:
+                    previous_article_keys.append(raw_previous)
+            article["previous_article_keys"] = previous_article_keys
+        articles.append(article)
+
     storyline["articles"] = articles
-    return storyline
+    return storyline, manifest_entries
 
 
 def parse_storyline_xml(xml_path: str) -> dict[str, Any]:
@@ -94,31 +129,19 @@ def parse_storyline_xml(xml_path: str) -> dict[str, Any]:
     if storylines_node is None:
         raise ValueError(f"STORYLINES node not found in XML: {path}")
 
-    storylines = [_parse_storyline(node) for node in storylines_node.findall("STORYLINE")]
+    storylines: list[dict[str, Any]] = []
+    article_id_assignments: dict[str, int] = {}
+    for node in storylines_node.findall("STORYLINE"):
+        storyline, assignments = _parse_storyline(node)
+        storylines.append(storyline)
+        article_id_assignments.update(assignments)
+
     return {
         "source_xml_path": str(path),
         "source_fileversion": root.attrib.get("fileversion", ""),
         "storylines": storylines,
+        "article_id_assignments": article_id_assignments,
     }
-
-
-def merge_storylines(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, int]:
-    merged = {str(storyline.get("id")): storyline for storyline in existing}
-    added = 0
-    updated = 0
-    for storyline in incoming:
-        storyline_id = str(storyline.get("id"))
-        if storyline_id in merged:
-            updated += 1
-        else:
-            added += 1
-        merged[storyline_id] = storyline
-    ordered_ids = [str(storyline.get("id")) for storyline in existing]
-    for storyline in incoming:
-        storyline_id = str(storyline.get("id"))
-        if storyline_id not in ordered_ids:
-            ordered_ids.append(storyline_id)
-    return [merged[storyline_id] for storyline_id in ordered_ids], added, updated
 
 
 def backup_path_for(xml_path: str) -> Path:

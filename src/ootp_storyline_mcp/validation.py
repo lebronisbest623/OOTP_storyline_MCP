@@ -1,12 +1,12 @@
-import json
+﻿import json
 from collections import defaultdict
-from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
 from .catalog import load_catalog
 from .paths import SCHEMAS_DIR
+from .project_store import load_article_id_manifest
 
 
 SCHEMA_PATH = SCHEMAS_DIR / "storyline.schema.json"
@@ -59,16 +59,32 @@ def validate_project(project: dict[str, Any]) -> dict[str, Any]:
             if key not in allowed_data_object:
                 problems.append(f"required_data[{idx}] attribute not seen in stock XML: {key}")
 
+    article_keys: list[str] = []
     for idx, article in enumerate(project.get("articles", [])):
-        article_core = {"id", "subject", "text", "injury_description", "reply"}
+        article_core = {
+            "article_key",
+            "subject",
+            "text",
+            "injury_description",
+            "reply",
+            "previous_article_keys",
+        }
         article_allowed = allowed_article | article_core
         for key in article.keys():
             if key not in article_allowed:
                 problems.append(f"articles[{idx}] attribute not seen in stock XML: {key}")
+        article_keys.append(str(article.get("article_key", "")))
 
-    article_ids = [article.get("id") for article in project.get("articles", [])]
-    if len(article_ids) != len(set(article_ids)):
-        problems.append("article ids must be unique within a project")
+    if len(article_keys) != len(set(article_keys)):
+        problems.append("article_key values must be unique within a project")
+
+    article_key_set = {key for key in article_keys if key}
+    for idx, article in enumerate(project.get("articles", [])):
+        for previous_key in article.get("previous_article_keys", []):
+            if str(previous_key) not in article_key_set:
+                problems.append(
+                    f"articles[{idx}] references missing previous_article_key: {previous_key}"
+                )
 
     return {
         "valid": not problems,
@@ -81,8 +97,8 @@ def validate_bundle(projects: list[dict[str, Any]]) -> dict[str, Any]:
     problems: list[str] = []
 
     storyline_id_map: dict[str, list[str]] = defaultdict(list)
-    article_id_map: dict[int, list[str]] = defaultdict(list)
     project_validation_results: list[dict[str, Any]] = []
+    active_manifest_keys: set[str] = set()
 
     for project in projects:
         project_id = str(project.get("id", "<missing-id>"))
@@ -90,10 +106,11 @@ def validate_bundle(projects: list[dict[str, Any]]) -> dict[str, Any]:
 
         project_validation = validate_project(project)
         project_validation_results.append({"id": project_id, "validation": project_validation})
+
         for article in project.get("articles", []):
-            article_id = article.get("id")
-            if isinstance(article_id, int):
-                article_id_map[article_id].append(project_id)
+            article_key = str(article.get("article_key", "")).strip()
+            if article_key:
+                active_manifest_keys.add(f"{project_id}:{article_key}")
 
     for storyline_id, project_ids in sorted(storyline_id_map.items()):
         if len(project_ids) > 1:
@@ -101,12 +118,17 @@ def validate_bundle(projects: list[dict[str, Any]]) -> dict[str, Any]:
                 f"bundle duplicate storyline id '{storyline_id}' appears {len(project_ids)} times"
             )
 
-    for article_id, project_ids in sorted(article_id_map.items()):
-        unique_projects = sorted(set(project_ids))
-        if len(unique_projects) > 1:
-            joined = ", ".join(unique_projects)
+    manifest = load_article_id_manifest()
+    article_id_map: dict[int, list[str]] = defaultdict(list)
+    for manifest_key, article_id in manifest.get("assignments", {}).items():
+        if manifest_key in active_manifest_keys:
+            article_id_map[int(article_id)].append(manifest_key)
+
+    for article_id, manifest_keys in sorted(article_id_map.items()):
+        if len(manifest_keys) > 1:
+            joined = ", ".join(sorted(manifest_keys))
             problems.append(
-                f"bundle article id collision for article {article_id} across projects: {joined}"
+                f"bundle article id collision for compiled article {article_id}: {joined}"
             )
 
     invalid_project_count = sum(

@@ -1,4 +1,4 @@
-import importlib
+﻿import importlib
 import json
 from typing import Any
 
@@ -48,15 +48,6 @@ def _runtime() -> dict[str, Any]:
 
 
 
-def _lookup(records: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
-    name_lower = name.lower()
-    for record in records:
-        if record["name"] == name or record["name"].lower() == name_lower:
-            return record
-    return None
-
-
-
 def _normalize_section(section: str) -> str:
     normalized = section.strip().lower()
     normalized = normalized.replace(" ", "_")
@@ -74,15 +65,6 @@ def _project_with_validation(project: dict[str, Any]) -> dict[str, Any]:
         "project": project,
         "validation": runtime["validation"].validate_project(project),
     }
-
-
-
-def _resolve_projects_from_json(project_ids_json: str = "") -> list[dict[str, Any]]:
-    runtime = _runtime()
-    if not project_ids_json.strip():
-        return runtime["project_store"].load_projects()
-    project_ids = json.loads(project_ids_json)
-    return runtime["project_store"].load_projects(project_ids)
 
 
 @mcp.tool()
@@ -173,6 +155,7 @@ def import_storyline_xml(xml_path: str, mode: str = "replace") -> dict[str, Any]
             parsed["storylines"],
             source_xml_path=parsed["source_xml_path"],
             source_fileversion=parsed["source_fileversion"],
+            article_id_assignments=parsed.get("article_id_assignments", {}),
         )
     else:
         before_count = len(runtime["project_store"].load_workspace().get("storylines", []))
@@ -180,11 +163,13 @@ def import_storyline_xml(xml_path: str, mode: str = "replace") -> dict[str, Any]
             parsed["storylines"],
             source_xml_path=parsed["source_xml_path"],
             source_fileversion=parsed["source_fileversion"],
+            article_id_assignments=parsed.get("article_id_assignments", {}),
         )
         after_count = len(workspace.get("storylines", []))
         return {
             "workspace": runtime["project_store"].get_workspace_summary(),
             "imported_storyline_count": len(parsed["storylines"]),
+            "imported_article_id_count": len(parsed.get("article_id_assignments", {})),
             "mode": normalized_mode,
             "added_or_updated_count": len(parsed["storylines"]),
             "workspace_storyline_count_before": before_count,
@@ -195,6 +180,7 @@ def import_storyline_xml(xml_path: str, mode: str = "replace") -> dict[str, Any]
     return {
         "workspace": runtime["project_store"].get_workspace_summary(),
         "imported_storyline_count": len(parsed["storylines"]),
+        "imported_article_id_count": len(parsed.get("article_id_assignments", {})),
         "mode": normalized_mode,
         "validation": runtime["validation"].validate_bundle(workspace.get("storylines", [])),
     }
@@ -292,18 +278,19 @@ def validate_workspace() -> dict[str, Any]:
 def get_authoring_guidance() -> dict[str, Any]:
     return {
         "recommended_workflow": [
-            "Treat the local workspace file as the single source of truth for your storyline file.",
-            "Add one storyline entry at a time, but keep them accumulated in the same workspace.",
-            "Run project validation often, then run workspace validation before final export.",
-            "Treat engine_debug_trace trigger events as valid but distinct from stock_xml triggers.",
+            "Keep one storyline per JSON file in the local projects directory.",
+            "Use article_key and previous_article_keys while authoring instead of numeric ARTICLE ids.",
+            "Import an existing XML file when you want to edit stock or previously exported storylines.",
+            "Run project validation often, then run workspace validation before final XML export.",
+            "Let export compile every project file into one storylines.xml and preserve stable numeric article ids through the local manifest.",
             "For Korean or other non-ASCII text, trust the written UTF-8 files over raw PowerShell rendering.",
         ],
-        "why_single_workspace_is_better": (
-            "OOTP ultimately reads one storyline XML file. This server now stores authored storyline entries in one "
-            "workspace JSON file so ongoing work matches the final export shape more closely."
+        "why_project_files_are_better": (
+            "OOTP reads one final storyline XML file, but authoring is safer when each storyline lives in its own JSON file. "
+            "This server now treats the projects directory as the local source set and compiles it into one XML on save."
         ),
         "hot_reload_note": (
-            "This server reloads local catalog, validation, export, and project-store modules on each tool call. "
+            "This server reloads local catalog, validation, export, import, and project-store modules on each tool call. "
             "Editing those modules should now reflect without a full server restart."
         ),
     }

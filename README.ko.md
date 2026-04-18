@@ -1,15 +1,8 @@
 ﻿# OOTP Storyline MCP
 
-OOTP 스토리라인 작성, 검증, XML export를 위한 MCP 서버입니다.
+OOTP 스토리라인을 로컬 JSON 파일로 편집하고, 다시 하나의 OOTP 호환 XML로 합쳐주는 MCP 서버입니다.
 
 영문 메인 README: [README.md](README.md)
-
-## 개요
-
-- 여러 STORYLINE 엔트리를 하나의 누적 workspace JSON 파일에 저장
-- 단일 프로젝트 및 번들 검증
-- OOTP 호환 XML export
-- stock XML과 engine debug trace 양쪽에서 발견된 trigger 지원
 
 ## 요구 사항
 
@@ -25,6 +18,22 @@ OOTP 스토리라인 작성, 검증, XML export를 위한 MCP 서버입니다.
 cd C:\Users\user\OOTP_storyline_MCP
 python run_server.py
 ```
+
+## 저장 구조
+
+- `projects/*.json`: STORYLINE 하나당 JSON 하나
+- `projects/_workspace.json`: 원본 XML 경로 같은 로컬 메타데이터
+- `projects/_article_ids.json`: export 시 유지되는 안정적인 `ARTICLE id` 매핑
+- `save_workspace_xml`: 모든 프로젝트 JSON을 하나의 XML로 컴파일
+
+## 권장 워크플로우
+
+1. `import_storyline_xml`
+2. `get_workspace`
+3. `get_project`
+4. `patch_storyline_project`
+5. `validate_storyline_project` 또는 `validate_workspace`
+6. `save_workspace_xml`
 
 ## 클라이언트 연결
 
@@ -76,7 +85,7 @@ claude mcp add --scope project ootp-storyline -- python run_server.py
 }
 ```
 
-전역 설정에서는 절대경로를 쓰는 것이 안전합니다. 상대경로는 MCP 설정 파일이 프로젝트 루트에 있을 때만 안정적으로 동작합니다.
+전역 설정에서는 절대경로를 쓰는 것이 안전합니다.
 
 ### Cursor
 
@@ -94,14 +103,9 @@ claude mcp add --scope project ootp-storyline -- python run_server.py
 }
 ```
 
-Cursor도 프로젝트 로컬 설정이 아니라 전역 MCP 설정을 쓴다면 절대경로를 쓰는 쪽이 안전합니다.
+Cursor도 전역 MCP 설정을 쓴다면 절대경로를 쓰는 쪽이 안전합니다.
 
 ## 핵심 MCP 툴
-
-워크스페이스:
-- `get_workspace`
-- `import_storyline_xml`
-- `save_workspace_xml`
 
 카탈로그:
 - `get_catalog_summary`
@@ -109,13 +113,18 @@ Cursor도 프로젝트 로컬 설정이 아니라 전역 MCP 설정을 쓴다면
 - `list_data_object_types`
 - `list_attributes`
 
-스토리라인 엔트리:
+워크스페이스:
+- `get_workspace`
+- `import_storyline_xml`
+- `save_workspace_xml`
+
+스토리라인:
 - `get_project`
 - `delete_project`
 - `create_storyline_project`
 - `patch_storyline_project`
 
-검증/출력:
+검증:
 - `validate_storyline_project`
 - `validate_workspace`
 
