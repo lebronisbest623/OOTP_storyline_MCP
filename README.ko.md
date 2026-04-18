@@ -61,6 +61,23 @@ claude mcp add --scope project ootp-storyline -- python run_server.py
 }
 ```
 
+전역 `~/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ootp-storyline": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:\\Users\\<user>\\OOTP_storyline_MCP\\run_server.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+전역 설정에서는 절대경로를 쓰는 것이 안전합니다. 상대경로는 MCP 설정 파일이 프로젝트 루트에 있을 때만 안정적으로 동작합니다.
+
 ### Cursor
 
 프로젝트 `.cursor/mcp.json`:
@@ -76,6 +93,8 @@ claude mcp add --scope project ootp-storyline -- python run_server.py
   }
 }
 ```
+
+Cursor도 프로젝트 로컬 설정이 아니라 전역 MCP 설정을 쓴다면 절대경로를 쓰는 쪽이 안전합니다.
 
 ## 핵심 MCP 툴
 

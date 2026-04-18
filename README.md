@@ -61,6 +61,23 @@ Project `.mcp.json`:
 }
 ```
 
+Global `~/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ootp-storyline": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:\\Users\\<user>\\OOTP_storyline_MCP\\run_server.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+Use an absolute path in global config. Relative paths only work reliably when the MCP config file lives in the project root.
+
 ### Cursor
 
 Project `.cursor/mcp.json`:
@@ -76,6 +93,8 @@ Project `.cursor/mcp.json`:
   }
 }
 ```
+
+If you use a global Cursor MCP config instead of a project-local one, use an absolute path there as well.
 
 ## Core tools
 
