@@ -121,10 +121,3 @@ Cursor도 프로젝트 로컬 설정이 아니라 전역 MCP 설정을 쓴다면
 
 가이드:
 - `get_authoring_guidance`
-
-## 참고
-
-- 기본 작성 대상은 `projects/storyline_workspace.json`입니다.
-- `projects/*.json`은 기본적으로 git에 포함하지 않습니다.
-- `stock/storylines_english.xml`도 기본적으로 git에 포함하지 않습니다.
-- 이 저장소는 OOTP 원본 자산이 아니라 MCP 서버와 툴킷 자체를 배포합니다.

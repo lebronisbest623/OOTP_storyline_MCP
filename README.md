@@ -121,10 +121,3 @@ Validation / export:
 
 Guidance:
 - `get_authoring_guidance`
-
-## Notes
-
-- The default authoring target is `projects/storyline_workspace.json`.
-- `projects/*.json` is not tracked by default.
-- `stock/storylines_english.xml` is not tracked by default.
-- This repository ships the MCP server and toolkit, not OOTP-owned content.
